@@ -81,10 +81,18 @@ module Minitest
         # Rails 7.1 adds `failure_screenshot_path` to metadata
         # Output according to Gitlab format
         # https://docs.gitlab.com/ee/ci/testing/unit_test_reports.html#view-junit-screenshots-on-gitlab
-        if result.respond_to?("metadata") && result.metadata[:failure_screenshot_path]
-          screenshot = Ox::Element.new("system-out")
-          screenshot << "[[ATTACHMENT|#{result.metadata[:failure_screenshot_path]}]]"
-          testcase << screenshot
+        if result.respond_to?(:metadata)
+          metadata = begin
+            result.metadata
+          rescue StandardError
+            nil
+          end
+        
+          if metadata.is_a?(Hash) && (path = metadata[:failure_screenshot_path])
+            screenshot = Ox::Element.new('system-out')
+            screenshot << "[[ATTACHMENT|#{path}]]"
+            testcase << screenshot
+          end
         end
 
         testcase
