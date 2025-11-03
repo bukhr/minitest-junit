@@ -65,6 +65,31 @@ class ReporterTest < Minitest::Test
     assert_equal '-1', example_node.attribute('line').value
   end
 
+  # Tests for metadata type safety (minitest 5.26+ compatibility)
+  def test_handles_metadata_that_raises_exception
+    reporter = create_reporter
+    result = create_test_result_with_broken_metadata
+    reporter.record result
+    reporter.report
+
+    parsed_report = Nokogiri::XML(reporter.output)
+    testcase = parsed_report.xpath("//testcase[@name='#{result.name}']").first
+    refute_nil testcase, "Testcase should be present in report"
+    assert_empty testcase.xpath(".//system-out"), "Should not have system-out element when metadata raises exception"
+  end
+
+  def test_handles_metadata_returning_non_hash
+    reporter = create_reporter
+    result = create_test_result_with_non_hash_metadata
+    reporter.record result
+    reporter.report
+
+    parsed_report = Nokogiri::XML(reporter.output)
+    testcase = parsed_report.xpath("//testcase[@name='#{result.name}']").first
+    refute_nil testcase, "Testcase should be present in report"
+    assert_empty testcase.xpath(".//system-out"), "Should not have system-out element when metadata is not a Hash"
+  end
+
   private
 
   def do_formatting_test(reporter, count: 1, cause_failures: 0)
@@ -110,5 +135,43 @@ class ReporterTest < Minitest::Test
     end
     reporter.start
     reporter
+  end
+
+  # Helper: simulates minitest 5.26+ where metadata can raise an exception
+  def create_test_result_with_broken_metadata
+    test = Class.new(Minitest::Test) do
+      define_method 'class' do
+        FakeTestName
+      end
+    end.new 'test_broken_metadata'
+    test.time = 1.0
+    test.assertions = 1
+    test.failures = []
+
+    result = Minitest::Result.from test
+    def result.metadata
+      raise StandardError, "Metadata access error"
+    end
+    
+    result
+  end
+
+  # Helper: simulates minitest 5.26+ where metadata returns non-Hash type
+  def create_test_result_with_non_hash_metadata
+    test = Class.new(Minitest::Test) do
+      define_method 'class' do
+        FakeTestName
+      end
+    end.new 'test_non_hash_metadata'
+    test.time = 1.0
+    test.assertions = 1
+    test.failures = []
+
+    result = Minitest::Result.from test
+    def result.metadata
+      "not a hash"
+    end
+    
+    result
   end
 end
