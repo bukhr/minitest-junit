@@ -54,13 +54,12 @@ module Minitest
         @io << Ox.dump(doc)
       end
 
-      def format(result, _parent = nil)
+      def format(result, parent = nil)
         testcase = Ox::Element.new('testcase')
         testcase['classname'] = format_class(result)
         testcase['name']      = format_name(result)
         testcase['time']      = format_time(result.respond_to?(:time) ? result.time : 0)
       
-        # Safely set source file/line (may be absent in some runners)
         if result.respond_to?(:source_location) && result.source_location
           file, line = result.source_location
           testcase['file'] = relative_to_cwd(file)
@@ -70,16 +69,13 @@ module Minitest
           testcase['line'] = ''
         end
       
-        # Fallback for assertions if not exposed
         testcase['assertions'] = result.respond_to?(:assertions) ? result.assertions : 0
       
-        # Skipped tests
         if result.skipped?
           skipped = Ox::Element.new('skipped')
           skipped['message'] = result.respond_to?(:message) ? result.message : result.to_s
           testcase << skipped
         else
-          # Failures/errors (guard against nil/empty)
           Array(result.failures).each do |failure|
             tag = Ox::Element.new(classify(failure))
             tag['message'] = failure.respond_to?(:message) ? failure.message.to_s : failure.to_s
