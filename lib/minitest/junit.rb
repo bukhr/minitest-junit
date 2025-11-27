@@ -57,36 +57,48 @@ module Minitest
       def format(result, parent = nil)
         testcase = Ox::Element.new('testcase')
         testcase['classname'] = format_class(result)
-        testcase['name'] = format_name(result)
-        testcase['time'] = format_time(result.time)
-        testcase['file'] = relative_to_cwd(result.source_location.first)
-        testcase['line'] = result.source_location.last
-        testcase['assertions'] = result.assertions
-
+        testcase['name']      = format_name(result)
+        testcase['time']      = format_time(result.respond_to?(:time) ? result.time : 0)
+      
+        if result.respond_to?(:source_location) && result.source_location
+          file, line = result.source_location
+          testcase['file'] = relative_to_cwd(file)
+          testcase['line'] = line
+        else
+          testcase['file'] = ''
+          testcase['line'] = ''
+        end
+      
+        testcase['assertions'] = result.respond_to?(:assertions) ? result.assertions : 0
+      
         if result.skipped?
           skipped = Ox::Element.new('skipped')
-          skipped['message'] = result
-          skipped << ""
+          skipped['message'] = result.respond_to?(:message) ? result.message : result.to_s
           testcase << skipped
         else
-          result.failures.each do |failure|
-            failure_tag = Ox::Element.new(classify(failure))
-            failure_tag['message'] = result
-            failure_tag << format_backtrace(failure)
-            testcase << failure_tag
+          Array(result.failures).each do |failure|
+            tag = Ox::Element.new(classify(failure))
+            tag['message'] = failure.respond_to?(:message) ? failure.message.to_s : failure.to_s
+            tag << format_backtrace(failure)
+            testcase << tag
           end
         end
-
-        # Minitest 5.19 supports metadata
-        # Rails 7.1 adds `failure_screenshot_path` to metadata
-        # Output according to Gitlab format
-        # https://docs.gitlab.com/ee/ci/testing/unit_test_reports.html#view-junit-screenshots-on-gitlab
-        if result.respond_to?("metadata") && result.metadata[:failure_screenshot_path]
-          screenshot = Ox::Element.new("system-out")
-          screenshot << "[[ATTACHMENT|#{result.metadata[:failure_screenshot_path]}]]"
-          testcase << screenshot
+      
+        # Rails 7.1+ screenshot attachment (GitLab JUnit consumption)
+        if result.respond_to?(:metadata)
+          metadata = begin
+            result.metadata
+          rescue StandardError
+            nil
+          end
+      
+          if metadata.is_a?(Hash) && (path = metadata[:failure_screenshot_path])
+            screenshot = Ox::Element.new('system-out')
+            screenshot << "[[ATTACHMENT|#{path}]]"
+            testcase << screenshot
+          end
         end
-
+      
         testcase
       end
 
